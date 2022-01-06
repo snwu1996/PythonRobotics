@@ -75,16 +75,20 @@ def set_path(paths, lengths, ctypes, step_size):
     path.lengths = lengths
     path.L = sum(np.abs(lengths))
 
-    # check same path exist
-    for i_path in paths:
-        type_is_same = (i_path.ctypes == path.ctypes)
-        length_is_close = (sum(np.abs(i_path.lengths)) - path.L) <= step_size
-        if type_is_same and length_is_close:
-            return paths  # same path found, so do not insert path
+    # print(path.ctypes)
+    # print(path.lengths)
+    # print(path.L)
 
-    # check path is long enough
-    if path.L <= step_size:
-        return paths  # too short, so do not insert path
+    # check same path exist
+    # for i_path in paths:
+    #     type_is_same = (i_path.ctypes == path.ctypes)
+    #     length_is_close = (sum(np.abs(i_path.lengths)) - path.L) <= step_size
+    #     if type_is_same and length_is_close:
+    #         return paths  # same path found, so do not insert path
+
+    # # check path is long enough
+    # if path.L <= step_size:
+    #     return paths  # too short, so do not insert path
 
     paths.append(path)
     return paths
@@ -326,37 +330,50 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
     return paths
 
 
-def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2):
+def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, reverse_first=False):
     paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size)
     if not paths:
         return None, None, None, None, None  # could not generate any path
 
     # search minimum cost path
-    best_path_index = paths.index(min(paths, key=lambda p: abs(p.L)))
-    b_path = paths[best_path_index]
+    # if reverse_first then select minimum out of paths that reverse before going forward
+    best_path = None
+    if reverse_first:
+        for path in paths:
+            if path.lengths[0] > 0:
+                continue
+            if best_path is None or abs(path.L) < (best_path.L):
+                best_path = path
+    # if we don't care about first going reverse first or we can't find a valid path
+    # that reverses then select the smallest valid path
+    if best_path is None:
+        best_path_index = paths.index(min(paths, key=lambda p: abs(p.L)))
+        best_path = paths[best_path_index]
 
-    return b_path.x, b_path.y, b_path.yaw, b_path.ctypes, b_path.lengths
+    return best_path.x, best_path.y, best_path.yaw, best_path.ctypes, best_path.lengths
 
 
 def main():
     print("Reeds Shepp path planner sample start!!")
 
-    start_x = -1.0  # [m]
-    start_y = -4.0  # [m]
-    start_yaw = np.deg2rad(-20.0)  # [rad]
+    start_x = 0  # [m]
+    start_y = 0  # [m]
+    start_yaw = np.deg2rad(0)  # [rad]
 
-    end_x = 5.0  # [m]
-    end_y = 5.0  # [m]
-    end_yaw = np.deg2rad(25.0)  # [rad]
+    end_x = 0  # [m]
+    end_y = 1.0  # [m]
+    end_yaw = np.deg2rad(0)  # [rad]
 
-    curvature = 0.1
+    min_turn_radius = 2
+    curvature = 1/min_turn_radius
     step_size = 0.05
 
     xs, ys, yaws, modes, lengths = reeds_shepp_path_planning(start_x, start_y,
                                                              start_yaw, end_x,
                                                              end_y, end_yaw,
                                                              curvature,
-                                                             step_size)
+                                                             step_size,
+                                                             reverse_first=True)
 
     if show_animation:  # pragma: no cover
         plt.cla()
