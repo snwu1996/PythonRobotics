@@ -330,10 +330,14 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
     return paths
 
 
-def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, reverse_first=False):
+def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, reverse_first=False, max_path_length=100.0):
     paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size)
     if not paths:
         return None, None, None, None, None  # could not generate any path
+
+    # Sometimes we get a path that is huge if the change yaw is small
+    # and the path is going backwards. Filter these out.
+    paths = list(filter(lambda path: sum(list(map(abs,path.lengths))) < max_path_length, paths))
 
     # search minimum cost path
     # if reverse_first then select minimum out of paths that reverse before going forward
@@ -356,15 +360,16 @@ def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, r
 def main():
     print("Reeds Shepp path planner sample start!!")
 
-    start_x = 0  # [m]
-    start_y = 0  # [m]
+    start_x = 0.0  # [m]
+    start_y = 0.0  # [m]
     start_yaw = np.deg2rad(0)  # [rad]
 
-    end_x = 0  # [m]
-    end_y = 1.0  # [m]
-    end_yaw = np.deg2rad(0)  # [rad]
+    end_x = 8.0  # [m]
+    end_y = 2.0  # [m]
+    end_yaw = 0.001
+    # end_yaw = np.deg2rad(0)  # [rad]
 
-    min_turn_radius = 2
+    min_turn_radius = 1.5
     curvature = 1/min_turn_radius
     step_size = 0.05
 
@@ -373,7 +378,8 @@ def main():
                                                              end_y, end_yaw,
                                                              curvature,
                                                              step_size,
-                                                             reverse_first=True)
+                                                             reverse_first=True,
+                                                             max_path_length=100.0)
 
     if show_animation:  # pragma: no cover
         plt.cla()
