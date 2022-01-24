@@ -75,10 +75,6 @@ def set_path(paths, lengths, ctypes, step_size):
     path.lengths = lengths
     path.L = sum(np.abs(lengths))
 
-    # print(path.ctypes)
-    # print(path.lengths)
-    # print(path.L)
-
     # check same path exist
     # for i_path in paths:
     #     type_is_same = (i_path.ctypes == path.ctypes)
@@ -330,29 +326,40 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
     return paths
 
 
-def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, reverse_first=False, max_path_length=100.0):
+def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2,
+                              reverse_only=False, no_frf=False,
+                              reverse_preference_tol=None,
+                              max_path_length=float('inf')):
     paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size)
     if not paths:
         return None, None, None, None, None  # could not generate any path
 
-    # Sometimes we get a path that is huge if the change yaw is small
-    # and the path is going backwards. Filter these out.
-    paths = list(filter(lambda path: sum(list(map(abs,path.lengths))) < max_path_length, paths))
+    # Filter out paths that are too large because sometime they
+    paths = list(filter(lambda path: path.L < max_path_length, paths))
 
-    # search minimum cost path
-    # if reverse_first then select minimum out of paths that reverse before going forward
-    best_path = None
-    if reverse_first:
+    # Filter out paths that go forward if we wish to enforce reverse only
+    if reverse_only:
+        paths = list(filter(lambda path: path.lengths[0] < 0, paths))
+
+    # Filter out path the go forward, reverse, forward
+    if no_frf:
+        filtered_paths = []
         for path in paths:
-            if path.lengths[0] > 0:
-                continue
-            if best_path is None or abs(path.L) < (best_path.L):
+            if not (path.lengths[0] > 0 and (path.lengths[1] < 0 or path.lengths[2] < 0)):
+                filtered_paths.append(path)
+        paths = filtered_paths
+
+    # Select minimum length path
+    paths.sort(key=lambda path: path.L)
+    best_path = paths[0]
+
+    # Have an optional preference for selecting the reverse path if two paths are
+    # within reverse_preference_tol meters of each other.
+    if not reverse_only and reverse_preference_tol is not None and best_path.lengths[0] > 0:
+        for path in paths[1:]:
+            if abs(path.L-best_path.L) < reverse_preference_tol and path.lengths[0] < 0:
                 best_path = path
-    # if we don't care about first going reverse first or we can't find a valid path
-    # that reverses then select the smallest valid path
-    if best_path is None:
-        best_path_index = paths.index(min(paths, key=lambda p: abs(p.L)))
-        best_path = paths[best_path_index]
+                break
 
     return best_path.x, best_path.y, best_path.yaw, best_path.ctypes, best_path.lengths
 
@@ -360,43 +367,45 @@ def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2, r
 def main():
     print("Reeds Shepp path planner sample start!!")
 
-    start_x = 0.0  # [m]
-    start_y = 0.0  # [m]
-    start_yaw = np.deg2rad(0)  # [rad]
 
-    end_x = 8.0  # [m]
-    end_y = 2.0  # [m]
-    end_yaw = 0.001
-    # end_yaw = np.deg2rad(0)  # [rad]
+    for i in range (-60, 60, 10):
+        for j in range(-60, 60, 10):
+            start_x = 8.0  # [m]
+            start_y = 1.0  # [m]
+            start_yaw = np.deg2rad(i)  # [rad]
 
-    min_turn_radius = 1.5
-    curvature = 1/min_turn_radius
-    step_size = 0.05
+            end_x = 8.0  # [m]
+            end_y = 2.0  # [m]
+            end_yaw = np.deg2rad(j)
+            # end_yaw = np.deg2rad(0)  # [rad]
 
-    xs, ys, yaws, modes, lengths = reeds_shepp_path_planning(start_x, start_y,
-                                                             start_yaw, end_x,
-                                                             end_y, end_yaw,
-                                                             curvature,
-                                                             step_size,
-                                                             reverse_first=True,
-                                                             max_path_length=100.0)
+            min_turn_radius = 1.5
+            curvature = 1/min_turn_radius
+            step_size = 0.2
 
-    if show_animation:  # pragma: no cover
-        plt.cla()
-        plt.plot(xs, ys, label="final course " + str(modes))
-        print(f"{lengths=}")
+            xs, ys, yaws, modes, lengths = reeds_shepp_path_planning(start_x, start_y,
+                                                                     start_yaw, end_x,
+                                                                     end_y, end_yaw,
+                                                                     curvature,
+                                                                     step_size,
+                                                                     no_frf=True)
 
-        # plotting
-        plot_arrow(start_x, start_y, start_yaw)
-        plot_arrow(end_x, end_y, end_yaw)
+            if show_animation:  # pragma: no cover
+                plt.cla()
+                plt.plot(xs, ys, label="final course " + str(modes))
+                print(f"{lengths=}")
 
-        plt.legend()
-        plt.grid(True)
-        plt.axis("equal")
-        plt.show()
+                # plotting
+                plot_arrow(start_x, start_y, start_yaw)
+                plot_arrow(end_x, end_y, end_yaw)
 
-    if not xs:
-        assert False, "No path"
+                plt.legend()
+                plt.grid(True)
+                plt.axis("equal")
+                plt.show()
+
+            if not xs:
+                assert False, "No path"
 
 
 if __name__ == '__main__':
