@@ -28,17 +28,25 @@ class Path:
         self.y = []  # y positions
         self.yaw = []  # orientations [rad]
         self.directions = []  # directions (1:forward, -1:backward)
+        self.segments_idx = []
 
-
-def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):
+def plot_arrow(x, y, yaw, ax=None, arrow_id=None, length=1.0, width=0.5, fc="r", ec="k"):
     if isinstance(x, list):
         for (ix, iy, iyaw) in zip(x, y, yaw):
             plot_arrow(ix, iy, iyaw)
     else:
-        plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw), fc=fc,
-                  ec=ec, head_width=width, head_length=width)
-        plt.plot(x, y)
-
+        if ax is None:
+            plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw), fc=fc,
+                      ec=ec, head_width=width, head_length=width)
+            plt.plot(x, y)
+        else:
+            try:
+                arrows[arrow_id].remove()
+            except KeyError as ke:
+                pass
+            arrow = ax.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw), fc=fc,
+                              ec=ec, head_width=width, head_length=width)
+            arrows[arrow_id] = arrow
 
 def mod2pi(x):
     # Be consistent with fmod in cplusplus here.
@@ -251,12 +259,13 @@ def calc_interpolate_dists_list(lengths, step_size):
     return interpolate_dists_list
 
 
-def generate_local_course(lengths, modes, max_curvature, step_size):
+def generate_local_course(lengths, modes, max_curvature, step_size, ret_segments=False):
     interpolate_dists_list = calc_interpolate_dists_list(lengths, step_size)
 
     origin_x, origin_y, origin_yaw = 0.0, 0.0, 0.0
 
-    xs, ys, yaws, directions = [], [], [], []
+    xs, ys, yaws, directions, segment_idx = [], [], [], [], []
+    idx = 0
     for (interp_dists, mode, length) in zip(interpolate_dists_list, modes,
                                             lengths):
 
@@ -268,11 +277,13 @@ def generate_local_course(lengths, modes, max_curvature, step_size):
             ys.append(y)
             yaws.append(yaw)
             directions.append(direction)
+            idx += 1
         origin_x = xs[-1]
         origin_y = ys[-1]
         origin_yaw = yaws[-1]
+        segment_idx.append(idx)
 
-    return xs, ys, yaws, directions
+    return xs, ys, yaws, directions, segment_idx
 
 
 def interpolate(dist, length, mode, max_curvature, origin_x, origin_y,
@@ -309,9 +320,8 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
 
     paths = generate_path(q0, q1, maxc, step_size)
     for path in paths:
-        xs, ys, yaws, directions = generate_local_course(path.lengths,
-                                                         path.ctypes, maxc,
-                                                         step_size * maxc)
+        xs, ys, yaws, directions, segment_idx = \
+            generate_local_course(path.lengths, path.ctypes, maxc, step_size * maxc)
 
         # convert global coordinate
         path.x = [math.cos(-q0[2]) * ix + math.sin(-q0[2]) * iy + q0[0] for
@@ -322,8 +332,9 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
         path.directions = directions
         path.lengths = [length / maxc for length in path.lengths]
         path.L = path.L / maxc
-
+        path.segment_idx = segment_idx
     return paths
+
 
 
 def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2,
@@ -361,51 +372,49 @@ def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2,
                 best_path = path
                 break
 
-    return best_path.x, best_path.y, best_path.yaw, best_path.ctypes, best_path.lengths
+    return best_path.x, best_path.y, best_path.yaw, best_path.ctypes, best_path.lengths, best_path.segment_idx
 
 
 def main():
     print("Reeds Shepp path planner sample start!!")
+    start_x = 0  # [m]
+    start_y = 0  # [m]
+    start_yaw = np.deg2rad(0)  # [rad]
 
+    end_x = 3.0  # [m]
+    end_y = 2.0  # [m]
+    end_yaw = np.deg2rad(40)
+    # end_yaw = np.deg2rad(0)  # [rad]
 
-    for i in range (-60, 60, 10):
-        for j in range(-60, 60, 10):
-            start_x = 8.0  # [m]
-            start_y = 1.0  # [m]
-            start_yaw = np.deg2rad(i)  # [rad]
+    min_turn_radius = 1.5
+    curvature = 1/min_turn_radius
+    step_size = 0.2
 
-            end_x = 8.0  # [m]
-            end_y = 2.0  # [m]
-            end_yaw = np.deg2rad(j)
-            # end_yaw = np.deg2rad(0)  # [rad]
+    xs, ys, yaws, modes, lengths, segment_idx = \
+        reeds_shepp_path_planning(start_x, start_y,
+                                  start_yaw, end_x,
+                                  end_y, end_yaw,
+                                  curvature,
+                                  step_size,
+                                  no_frf=True)
 
-            min_turn_radius = 1.5
-            curvature = 1/min_turn_radius
-            step_size = 0.2
+    if show_animation:  # pragma: no cover
+        plt.cla()
+        plt.plot(xs[0:segment_idx[0]], ys[0:segment_idx[0]])
+        plt.plot(xs[segment_idx[0]:segment_idx[1]], ys[segment_idx[0]:segment_idx[1]])
+        plt.plot(xs[segment_idx[1]:segment_idx[2]], ys[segment_idx[1]:segment_idx[2]])
 
-            xs, ys, yaws, modes, lengths = reeds_shepp_path_planning(start_x, start_y,
-                                                                     start_yaw, end_x,
-                                                                     end_y, end_yaw,
-                                                                     curvature,
-                                                                     step_size,
-                                                                     no_frf=True)
+        # plotting
+        plot_arrow(start_x, start_y, start_yaw)
+        plot_arrow(end_x, end_y, end_yaw)
 
-            if show_animation:  # pragma: no cover
-                plt.cla()
-                plt.plot(xs, ys, label="final course " + str(modes))
-                print(f"{lengths=}")
+        plt.legend()
+        plt.grid(True)
+        plt.axis("equal")
+        plt.show()
 
-                # plotting
-                plot_arrow(start_x, start_y, start_yaw)
-                plot_arrow(end_x, end_y, end_yaw)
-
-                plt.legend()
-                plt.grid(True)
-                plt.axis("equal")
-                plt.show()
-
-            if not xs:
-                assert False, "No path"
+    if not xs:
+        assert False, "No path"
 
 
 if __name__ == '__main__':
