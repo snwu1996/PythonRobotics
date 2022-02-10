@@ -314,11 +314,14 @@ def pi_2_pi(angle):
     return (angle + math.pi) % (2 * math.pi) - math.pi
 
 
-def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
+def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size, max_length=10000.0):
     q0 = [sx, sy, syaw]
     q1 = [gx, gy, gyaw]
 
     paths = generate_path(q0, q1, maxc, step_size)
+    # Filter out paths that are too large
+    paths = list(filter(lambda path: path.L < max_length, paths))
+    # filter(lambda path: path.L  paths)
     for path in paths:
         xs, ys, yaws, directions, segment_idx = \
             generate_local_course(path.lengths, path.ctypes, maxc, step_size * maxc)
@@ -340,13 +343,10 @@ def calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size):
 def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2,
                               reverse_only=False, no_frf=False,
                               reverse_preference_tol=None,
-                              max_path_length=float('inf')):
-    paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size)
+                              max_length=10000.0):
+    paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size, max_length)
     if not paths:
         return None, None, None, None, None  # could not generate any path
-
-    # Filter out paths that are too large because sometime they
-    paths = list(filter(lambda path: path.L < max_path_length, paths))
 
     # Filter out paths that go forward if we wish to enforce reverse only
     if reverse_only:
@@ -377,14 +377,14 @@ def reeds_shepp_path_planning(sx, sy, syaw, gx, gy, gyaw, maxc, step_size=0.2,
 
 def main():
     print("Reeds Shepp path planner sample start!!")
-    start_x = 0  # [m]
-    start_y = 0  # [m]
-    start_yaw = np.deg2rad(0)  # [rad]
+    start_x = -5.632410843700905e-16  # [m]
+    start_y = -2.1077588008074053e-16  # [m]
+    # start_yaw = np.deg2rad(0)  # [rad]
+    start_yaw = -3.838902900405637e-17  # [rad]
 
-    end_x = 3.0  # [m]
-    end_y = 2.0  # [m]
-    end_yaw = np.deg2rad(40)
-    # end_yaw = np.deg2rad(0)  # [rad]
+    end_x = 2.953105895361116  # [m]
+    end_y = 0.012972131236940267  # [m]
+    end_yaw = np.deg2rad(0)
 
     min_turn_radius = 1.5
     curvature = 1/min_turn_radius
