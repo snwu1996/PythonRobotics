@@ -38,6 +38,14 @@ class GridMap:
         self.ndata = self.width * self.height
         self.data = [init_val] * self.ndata
 
+    def imshow(self):
+        plt.figure()
+        plt.imshow(self.get_grid)
+        plt.show()
+
+    def get_grid(self):
+        return np.array(self.data).reshape((self.height, self.width))
+
     def get_value_from_xy_index(self, x_ind, y_ind):
         """get_value_from_xy_index
 

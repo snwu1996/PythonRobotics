@@ -21,7 +21,7 @@ try:
 except ImportError:
     raise
 
-do_animation = True
+do_animation = False
 
 
 class SweepSearcher:
@@ -144,7 +144,7 @@ def find_sweep_direction_and_start_position(ox, oy):
     return vec, sweep_start_pos
 
 
-def convert_grid_coordinate(ox, oy, sweep_vec, sweep_start_position):
+def convert_grid_coordinate(ox, oy, sweep_vec, sweep_start_position=[0.0,0.0]):
     tx = [ix - sweep_start_position[0] for ix in ox]
     ty = [iy - sweep_start_position[1] for iy in oy]
     th = math.atan2(sweep_vec[1], sweep_vec[0])
@@ -154,7 +154,7 @@ def convert_grid_coordinate(ox, oy, sweep_vec, sweep_start_position):
     return converted_xy[:, 0], converted_xy[:, 1]
 
 
-def convert_global_coordinate(x, y, sweep_vec, sweep_start_position):
+def convert_global_coordinate(x, y, sweep_vec, sweep_start_position=[0.0,0.0]):
     th = math.atan2(sweep_vec[1], sweep_vec[0])
     rot = Rot.from_euler('z', -th).as_matrix()[0:2, 0:2]
     converted_xy = np.stack([x, y]).T @ rot
@@ -185,16 +185,18 @@ def search_free_grid_index_at_edge_y(grid_map, from_upper=False):
     return x_indexes, y_index
 
 
-def setup_grid_map(ox, oy, resolution, sweep_direction, offset_grid=10):
+def setup_grid_map(ox, oy, resolution, sweep_direction=None, offset_grid=10):
     width = math.ceil((max(ox) - min(ox)) / resolution) + offset_grid
     height = math.ceil((max(oy) - min(oy)) / resolution) + offset_grid
     center_x = (np.max(ox) + np.min(ox)) / 2.0
     center_y = (np.max(oy) + np.min(oy)) / 2.0
 
     grid_map = GridMap(width, height, resolution, center_x, center_y)
-    grid_map.print_grid_map_info()
     grid_map.set_value_from_polygon(ox, oy, 1.0, inside=False)
     grid_map.expand_grid()
+
+    if sweep_direction is None:
+        return grid_map
 
     x_inds_goal_y = []
     goal_y = 0
@@ -231,7 +233,6 @@ def sweep_path_search(sweep_searcher, grid_map, grid_search_animation=False):
         c_x_index, c_y_index = sweep_searcher.move_target_grid(c_x_index,
                                                                c_y_index,
                                                                grid_map)
-
         if sweep_searcher.is_search_done(grid_map) or (
                 c_x_index is None or c_y_index is None):
             print("Done")
@@ -254,10 +255,12 @@ def sweep_path_search(sweep_searcher, grid_map, grid_search_animation=False):
 
 def planning(ox, oy, resolution,
              moving_direction=SweepSearcher.MovingDirection.RIGHT,
-             sweeping_direction=SweepSearcher.SweepDirection.UP,
-             ):
+             sweeping_direction=SweepSearcher.SweepDirection.DOWN,
+             sweep_yaw=None):
     sweep_vec, sweep_start_position = find_sweep_direction_and_start_position(
         ox, oy)
+    if sweep_yaw is not None:
+        sweep_vec = [np.cos(sweep_yaw), np.sin(sweep_yaw)]
 
     rox, roy = convert_grid_coordinate(ox, oy, sweep_vec,
                                        sweep_start_position)
@@ -272,8 +275,6 @@ def planning(ox, oy, resolution,
 
     rx, ry = convert_global_coordinate(px, py, sweep_vec,
                                        sweep_start_position)
-
-    print("Path length:", len(rx))
 
     return rx, ry
 
@@ -295,14 +296,13 @@ def planning_animation(ox, oy, resolution):  # pragma: no cover
             plt.axis("equal")
             plt.grid(True)
             plt.pause(0.1)
-
-        plt.cla()
+    else:
+        plt.figure()
         plt.plot(ox, oy, "-xb")
         plt.plot(px, py, "-r")
         plt.axis("equal")
         plt.grid(True)
-        plt.pause(0.1)
-        plt.close()
+        plt.show()
 
 
 def main():  # pragma: no cover
